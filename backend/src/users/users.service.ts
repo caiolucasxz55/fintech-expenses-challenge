@@ -1,8 +1,7 @@
 import { ConflictException, Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { User } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
-import { User } from './user.entity';
+import { PrismaService } from '../prisma/prisma.service';
 
 interface CreateUserData {
   name: string;
@@ -12,27 +11,23 @@ interface CreateUserData {
 
 @Injectable()
 export class UsersService {
-  constructor(
-    @InjectRepository(User)
-    private readonly userRepository: Repository<User>,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async create(data: CreateUserData): Promise<User> {
-    const existing = await this.userRepository.findOne({
+    const existing = await this.prisma.user.findUnique({
       where: { email: data.email },
     });
     if (existing) throw new ConflictException('Email already in use');
 
     const hashed = await bcrypt.hash(data.password, 10);
-    const user = this.userRepository.create({ ...data, password: hashed });
-    return this.userRepository.save(user);
+    return this.prisma.user.create({ data: { ...data, password: hashed } });
   }
 
   async findByEmail(email: string): Promise<User | null> {
-    return this.userRepository.findOne({ where: { email } });
+    return this.prisma.user.findUnique({ where: { email } });
   }
 
   async findById(id: string): Promise<User | null> {
-    return this.userRepository.findOne({ where: { id } });
+    return this.prisma.user.findUnique({ where: { id } });
   }
 }

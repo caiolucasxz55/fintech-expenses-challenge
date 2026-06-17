@@ -3,52 +3,57 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Prisma, TransactionType } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
 import {
   CreateTransactionDto,
   FilterTransactionDto,
   PaginatedResult,
   UpdateTransactionDto,
 } from './dto/transaction.dto';
-import { Transaction } from './transaction.entity';
 
 @Injectable()
 export class TransactionsService {
-  constructor(
-    @InjectRepository(Transaction)
-    private readonly transactionRepository: Repository<Transaction>,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  async create(userId: string, dto: CreateTransactionDto): Promise<Transaction> {
-    const transaction = this.transactionRepository.create({ ...dto, userId });
-    return this.transactionRepository.save(transaction);
+  async create(userId: string, dto: CreateTransactionDto) {
+    return this.prisma.transaction.create({
+      data: {
+        ...dto,
+        value: new Prisma.Decimal(dto.value),
+        date: new Date(dto.date),
+        userId,
+      },
+      include: { category: true },
+    });
   }
 
-  async findAll(
-    userId: string,
-    filters: FilterTransactionDto,
-  ): Promise<PaginatedResult<Transaction>> {
-    const { type, categoryId, startDate, endDate, page = 1, limit = 10 } =
-      filters;
+  async findAll(userId: string, filters: FilterTransactionDto): Promise<PaginatedResult<unknown>> {
+    const { type, categoryId, startDate, endDate, page = 1, limit = 10 } = filters;
 
-    const qb = this.transactionRepository
-      .createQueryBuilder('t')
-      .leftJoinAndSelect('t.category', 'category')
-      .where('t.userId = :userId', { userId })
-      .orderBy('t.date', 'DESC')
-      .addOrderBy('t.createdAt', 'DESC');
+    const where: Prisma.TransactionWhereInput = {
+      userId,
+      deletedAt: null,
+      ...(type && { type }),
+      ...(categoryId && { categoryId }),
+      ...((startDate ?? endDate) && {
+        date: {
+          ...(startDate && { gte: new Date(startDate) }),
+          ...(endDate && { lte: new Date(endDate) }),
+        },
+      }),
+    };
 
-    if (type) qb.andWhere('t.type = :type', { type });
-    if (categoryId) qb.andWhere('t.categoryId = :categoryId', { categoryId });
-    if (startDate) qb.andWhere('t.date >= :startDate', { startDate });
-    if (endDate) qb.andWhere('t.date <= :endDate', { endDate });
-
-    const total = await qb.getCount();
-    const data = await qb
-      .skip((page - 1) * limit)
-      .take(limit)
-      .getMany();
+    const [total, data] = await this.prisma.$transaction([
+      this.prisma.transaction.count({ where }),
+      this.prisma.transaction.findMany({
+        where,
+        include: { category: true },
+        orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+    ]);
 
     const lastPage = Math.ceil(total / limit) || 1;
 
@@ -58,10 +63,10 @@ export class TransactionsService {
     };
   }
 
-  async findOne(userId: string, id: string): Promise<Transaction> {
-    const transaction = await this.transactionRepository.findOne({
-      where: { id },
-      relations: ['category'],
+  async findOne(userId: string, id: string) {
+    const transaction = await this.prisma.transaction.findFirst({
+      where: { id, deletedAt: null },
+      include: { category: true },
     });
     if (!transaction) throw new NotFoundException('Transaction not found');
     if (transaction.userId !== userId)
@@ -69,18 +74,24 @@ export class TransactionsService {
     return transaction;
   }
 
-  async update(
-    userId: string,
-    id: string,
-    dto: UpdateTransactionDto,
-  ): Promise<Transaction> {
-    const transaction = await this.findOne(userId, id);
-    Object.assign(transaction, dto);
-    return this.transactionRepository.save(transaction);
+  async update(userId: string, id: string, dto: UpdateTransactionDto) {
+    await this.findOne(userId, id);
+    return this.prisma.transaction.update({
+      where: { id },
+      data: {
+        ...dto,
+        ...(dto.value !== undefined && { value: new Prisma.Decimal(dto.value) }),
+        ...(dto.date !== undefined && { date: new Date(dto.date) }),
+      },
+      include: { category: true },
+    });
   }
 
   async remove(userId: string, id: string): Promise<void> {
-    const transaction = await this.findOne(userId, id);
-    await this.transactionRepository.softRemove(transaction);
+    await this.findOne(userId, id);
+    await this.prisma.transaction.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
   }
 }

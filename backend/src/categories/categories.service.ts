@@ -1,33 +1,25 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Category } from './category.entity';
-import {
-  CreateCategoryDto,
-  UpdateCategoryDto,
-} from './dto/category.dto';
+import { Category } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
+import { CreateCategoryDto, UpdateCategoryDto } from './dto/category.dto';
 
 @Injectable()
 export class CategoriesService {
-  constructor(
-    @InjectRepository(Category)
-    private readonly categoryRepository: Repository<Category>,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async create(userId: string, dto: CreateCategoryDto): Promise<Category> {
-    const category = this.categoryRepository.create({ ...dto, userId });
-    return this.categoryRepository.save(category);
+    return this.prisma.category.create({ data: { ...dto, userId } });
   }
 
   async findAll(userId: string): Promise<Category[]> {
-    return this.categoryRepository.find({
+    return this.prisma.category.findMany({
       where: { userId },
-      order: { name: 'ASC' },
+      orderBy: { name: 'asc' },
     });
   }
 
   async findOne(userId: string, id: string): Promise<Category> {
-    const category = await this.categoryRepository.findOne({
+    const category = await this.prisma.category.findFirst({
       where: { id, userId },
     });
     if (!category) throw new NotFoundException('Category not found');
@@ -39,13 +31,12 @@ export class CategoriesService {
     id: string,
     dto: UpdateCategoryDto,
   ): Promise<Category> {
-    const category = await this.findOne(userId, id);
-    Object.assign(category, dto);
-    return this.categoryRepository.save(category);
+    await this.findOne(userId, id);
+    return this.prisma.category.update({ where: { id }, data: dto });
   }
 
   async remove(userId: string, id: string): Promise<void> {
-    const category = await this.findOne(userId, id);
-    await this.categoryRepository.remove(category);
+    await this.findOne(userId, id);
+    await this.prisma.category.delete({ where: { id } });
   }
 }

@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
+import { TransactionType } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
   IsDateString,
@@ -10,7 +11,8 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-import { TransactionType } from '../transaction.entity';
+
+export { TransactionType };
 
 export interface PaginationMeta {
   total: number;
@@ -35,7 +37,7 @@ export class CreateTransactionDto {
   @IsString()
   value: string;
 
-  @ApiProperty({ enum: TransactionType, example: TransactionType.EXPENSE })
+  @ApiProperty({ enum: TransactionType, example: TransactionType.expense })
   @IsEnum(TransactionType)
   type: TransactionType;
 
