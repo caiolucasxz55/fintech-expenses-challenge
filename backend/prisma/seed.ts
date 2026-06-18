@@ -13,9 +13,9 @@ import * as bcrypt from 'bcrypt';
 const prisma = new PrismaClient();
 
 const SEED_USER = {
-  name: 'Marina Costa',
-  email: 'marina.costa@fincorp.com.br',
-  password: 'fincorp123',
+  name: 'Admin FinCorp',
+  email: 'admin@fincorp.com.br',
+  password: 'admin123',
 };
 
 const CATEGORIES = [

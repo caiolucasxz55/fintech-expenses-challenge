@@ -1,14 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import {
-  Pencil,
-  Trash2,
-  Loader2,
-  ArrowLeftRight,
-  ArrowDownLeft,
-  ArrowUpRight,
-} from 'lucide-react';
+import { MoreHorizontal, Pencil, Trash2, Loader2, ArrowLeftRight } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -19,6 +12,13 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -38,7 +38,6 @@ interface TransactionListProps {
   isLoading: boolean;
   isFetching: boolean;
   onEdit: (transaction: Transaction) => void;
-  onPageChange: (page: number) => void;
 }
 
 export function TransactionList({
@@ -46,7 +45,6 @@ export function TransactionList({
   isLoading,
   isFetching,
   onEdit,
-  onPageChange,
 }: TransactionListProps) {
   const [toDelete, setToDelete] = useState<Transaction | null>(null);
   const remove = useDeleteTransaction();
@@ -58,23 +56,27 @@ export function TransactionList({
 
   if (isLoading) {
     return (
-      <div className="space-y-2 p-4">
+      <div className="flex flex-col gap-3 p-4">
         {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="h-12 animate-pulse rounded-md bg-muted" />
+          <div key={i} className="flex items-center gap-4">
+            <Skeleton className="h-5 flex-1" />
+            <Skeleton className="h-5 w-24" />
+            <Skeleton className="h-5 w-20" />
+            <Skeleton className="h-5 w-16" />
+          </div>
         ))}
       </div>
     );
   }
 
   const transactions = data?.data ?? [];
-  const meta = data?.meta;
 
   if (transactions.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center gap-3 p-12 text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-          <ArrowLeftRight className="h-6 w-6 text-muted-foreground" />
-        </div>
+      <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+        <span className="flex size-12 items-center justify-center rounded-full bg-muted">
+          <ArrowLeftRight className="size-6 text-muted-foreground" />
+        </span>
         <div>
           <p className="font-medium">Nenhuma transação encontrada</p>
           <p className="text-sm text-muted-foreground">
@@ -91,65 +93,61 @@ export function TransactionList({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Data</TableHead>
               <TableHead>Descrição</TableHead>
               <TableHead>Categoria</TableHead>
+              <TableHead>Data</TableHead>
               <TableHead>Tipo</TableHead>
               <TableHead className="text-right">Valor</TableHead>
-              <TableHead className="w-24 text-right">Ações</TableHead>
+              <TableHead className="w-12" />
             </TableRow>
           </TableHeader>
           <TableBody>
-            {transactions.map((tx) => {
-              const isIncome = tx.type === 'income';
+            {transactions.map((t) => {
+              const isIncome = t.type === 'income';
               return (
-                <TableRow key={tx.id}>
-                  <TableCell className="whitespace-nowrap text-muted-foreground">
-                    {formatDate(tx.date)}
-                  </TableCell>
-                  <TableCell className="font-medium">{tx.description}</TableCell>
+                <TableRow key={t.id}>
+                  <TableCell className="font-medium">{t.description}</TableCell>
                   <TableCell className="text-muted-foreground">
-                    {tx.category?.name ?? '—'}
+                    {t.category?.name ?? '—'}
+                  </TableCell>
+                  <TableCell className="tabular-nums text-muted-foreground">
+                    {formatDate(t.date)}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={isIncome ? 'success' : 'destructive'}>
-                      {isIncome ? (
-                        <ArrowDownLeft className="mr-1 h-3 w-3" />
-                      ) : (
-                        <ArrowUpRight className="mr-1 h-3 w-3" />
-                      )}
+                    <Badge variant={isIncome ? 'secondary' : 'outline'}>
                       {isIncome ? 'Entrada' : 'Saída'}
                     </Badge>
                   </TableCell>
                   <TableCell
                     className={cn(
                       'text-right font-semibold tabular-nums',
-                      isIncome ? 'text-success' : 'text-destructive',
+                      isIncome ? 'text-primary' : 'text-foreground',
                     )}
                   >
                     {isIncome ? '+' : '−'}
-                    {formatCurrency(tx.value)}
+                    {formatCurrency(t.value)}
                   </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => onEdit(tx)}
-                        aria-label="Editar"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-destructive hover:text-destructive"
-                        onClick={() => setToDelete(tx)}
-                        aria-label="Excluir"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+                  <TableCell>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" aria-label="Ações">
+                          <MoreHorizontal className="size-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => onEdit(t)}>
+                          <Pencil />
+                          Editar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onClick={() => setToDelete(t)}
+                        >
+                          <Trash2 />
+                          Excluir
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               );
@@ -157,33 +155,6 @@ export function TransactionList({
           </TableBody>
         </Table>
       </div>
-
-      {meta && (
-        <div className="flex items-center justify-between gap-4 border-t px-4 py-3 text-sm">
-          <p className="text-muted-foreground">
-            {meta.total} {meta.total === 1 ? 'transação' : 'transações'} · página{' '}
-            {meta.page} de {meta.lastPage}
-          </p>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={meta.page <= 1 || isFetching}
-              onClick={() => onPageChange(meta.page - 1)}
-            >
-              Anterior
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!meta.hasNextPage || isFetching}
-              onClick={() => onPageChange(meta.page + 1)}
-            >
-              Próxima
-            </Button>
-          </div>
-        </div>
-      )}
 
       <AlertDialog
         open={Boolean(toDelete)}
@@ -209,7 +180,7 @@ export function TransactionList({
               disabled={remove.isPending}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {remove.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              {remove.isPending && <Loader2 className="size-4 animate-spin" />}
               Excluir
             </AlertDialogAction>
           </AlertDialogFooter>

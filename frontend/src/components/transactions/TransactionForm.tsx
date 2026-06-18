@@ -27,7 +27,8 @@ import {
   useCreateTransaction,
   useUpdateTransaction,
 } from '@/hooks/useTransactions';
-import type { CreateTransactionPayload, Transaction } from '@/types';
+import { cn } from '@/lib/utils';
+import type { CreateTransactionPayload, Transaction, TransactionType } from '@/types';
 
 interface TransactionFormProps {
   open: boolean;
@@ -36,6 +37,11 @@ interface TransactionFormProps {
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
+
+const TYPE_OPTIONS: { value: TransactionType; label: string }[] = [
+  { value: 'income', label: 'Entrada' },
+  { value: 'expense', label: 'Saída' },
+];
 
 export function TransactionForm({
   open,
@@ -84,13 +90,13 @@ export function TransactionForm({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
             {isEdit ? 'Editar transação' : 'Nova transação'}
           </DialogTitle>
           <DialogDescription>
-            Registre uma movimentação financeira.
+            Registre uma entrada ou saída no fluxo de caixa da empresa.
           </DialogDescription>
         </DialogHeader>
 
@@ -101,10 +107,39 @@ export function TransactionForm({
         ) : (
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
             <div className="space-y-2">
+              <Label>Tipo</Label>
+              <Controller
+                control={control}
+                name="type"
+                rules={{ required: true }}
+                render={({ field }) => (
+                  <div className="inline-flex w-full rounded-lg border bg-muted p-1">
+                    {TYPE_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => field.onChange(opt.value)}
+                        className={cn(
+                          'flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                          field.value === opt.value
+                            ? 'bg-background text-foreground shadow-sm'
+                            : 'text-muted-foreground hover:text-foreground',
+                        )}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              />
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="description">Descrição</Label>
               <Input
                 id="description"
-                placeholder="Ex.: Pagamento de fornecedor"
+                placeholder="Ex.: Pagamento de cliente"
+                autoComplete="off"
                 {...register('description', {
                   required: 'Informe a descrição',
                   maxLength: { value: 255, message: 'Máximo de 255 caracteres' },
@@ -133,9 +168,7 @@ export function TransactionForm({
                   })}
                 />
                 {errors.value && (
-                  <p className="text-xs text-destructive">
-                    {errors.value.message}
-                  </p>
+                  <p className="text-xs text-destructive">{errors.value.message}</p>
                 )}
               </div>
 
@@ -147,61 +180,37 @@ export function TransactionForm({
                   {...register('date', { required: 'Informe a data' })}
                 />
                 {errors.date && (
-                  <p className="text-xs text-destructive">
-                    {errors.date.message}
-                  </p>
+                  <p className="text-xs text-destructive">{errors.date.message}</p>
                 )}
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Tipo</Label>
-                <Controller
-                  control={control}
-                  name="type"
-                  rules={{ required: true }}
-                  render={({ field }) => (
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="income">Entrada</SelectItem>
-                        <SelectItem value="expense">Saída</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Categoria</Label>
-                <Controller
-                  control={control}
-                  name="categoryId"
-                  rules={{ required: 'Selecione uma categoria' }}
-                  render={({ field }) => (
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {categories.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>
-                            {c.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
-                {errors.categoryId && (
-                  <p className="text-xs text-destructive">
-                    {errors.categoryId.message}
-                  </p>
+            <div className="space-y-2">
+              <Label>Categoria</Label>
+              <Controller
+                control={control}
+                name="categoryId"
+                rules={{ required: 'Selecione uma categoria' }}
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Selecione" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 )}
-              </div>
+              />
+              {errors.categoryId && (
+                <p className="text-xs text-destructive">
+                  {errors.categoryId.message}
+                </p>
+              )}
             </div>
 
             <DialogFooter>
@@ -211,8 +220,8 @@ export function TransactionForm({
                 </Button>
               </DialogClose>
               <Button type="submit" disabled={pending}>
-                {pending && <Loader2 className="h-4 w-4 animate-spin" />}
-                {isEdit ? 'Salvar' : 'Criar'}
+                {pending && <Loader2 className="size-4 animate-spin" />}
+                {isEdit ? 'Salvar alterações' : 'Criar transação'}
               </Button>
             </DialogFooter>
           </form>

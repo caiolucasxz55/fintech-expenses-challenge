@@ -1,13 +1,9 @@
 'use client';
 
-import {
-  Wallet,
-  ArrowDownLeft,
-  ArrowUpRight,
-  PiggyBank,
-  type LucideIcon,
-} from 'lucide-react';
+import { Wallet, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { cn, formatCurrency } from '@/lib/utils';
 import type { DashboardStats } from '@/types';
 
@@ -16,65 +12,63 @@ interface SummaryCardsProps {
   isLoading: boolean;
 }
 
-interface Stat {
+type Accent = 'primary' | 'success' | 'expense';
+
+function StatCard({
+  label,
+  value,
+  icon,
+  accent,
+  hint,
+}: {
   label: string;
   value: string;
-  icon: LucideIcon;
-  iconClass: string;
-  valueClass?: string;
-  hint?: string;
-}
+  icon: ReactNode;
+  accent: Accent;
+  hint: string;
+}) {
+  const accentClass = {
+    primary: 'bg-primary text-primary-foreground',
+    success: 'bg-secondary text-secondary-foreground',
+    expense: 'bg-accent text-accent-foreground',
+  }[accent];
 
-function buildStats(stats: DashboardStats): Stat[] {
-  const balance = parseFloat(stats.balance);
-  const income = parseFloat(stats.totalIncome);
-  const savingsRate = income > 0 ? (balance / income) * 100 : null;
-
-  return [
-    {
-      label: 'Saldo atual',
-      value: formatCurrency(stats.balance),
-      icon: Wallet,
-      iconClass: 'bg-primary/10 text-primary',
-      valueClass: balance < 0 ? 'text-destructive' : 'text-foreground',
-      hint: 'Entradas − saídas',
-    },
-    {
-      label: 'Entradas',
-      value: formatCurrency(stats.totalIncome),
-      icon: ArrowDownLeft,
-      iconClass: 'bg-success/10 text-success',
-      valueClass: 'text-success',
-      hint: 'Total de receitas no período',
-    },
-    {
-      label: 'Saídas',
-      value: formatCurrency(stats.totalExpense),
-      icon: ArrowUpRight,
-      iconClass: 'bg-destructive/10 text-destructive',
-      valueClass: 'text-destructive',
-      hint: 'Total de despesas no período',
-    },
-    {
-      label: 'Taxa de poupança',
-      value: savingsRate === null ? '—' : `${savingsRate.toFixed(1)}%`,
-      icon: PiggyBank,
-      iconClass: 'bg-blue-500/10 text-blue-600',
-      valueClass:
-        savingsRate !== null && savingsRate < 0 ? 'text-destructive' : undefined,
-      hint: 'Quanto das entradas sobra',
-    },
-  ];
+  return (
+    <Card>
+      <CardContent className="flex flex-col gap-3 p-5">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium text-muted-foreground">{label}</span>
+          <span
+            className={cn(
+              'flex size-9 items-center justify-center rounded-lg',
+              accentClass,
+            )}
+          >
+            {icon}
+          </span>
+        </div>
+        <span className="text-2xl font-semibold tracking-tight tabular-nums">
+          {value}
+        </span>
+        <span className="text-xs text-muted-foreground">{hint}</span>
+      </CardContent>
+    </Card>
+  );
 }
 
 export function SummaryCards({ stats, isLoading }: SummaryCardsProps) {
   if (isLoading || !stats) {
     return (
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {Array.from({ length: 3 }).map((_, i) => (
           <Card key={i}>
-            <CardContent className="p-6">
-              <div className="h-20 animate-pulse rounded-md bg-muted" />
+            <CardContent className="flex flex-col gap-3 p-5">
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="size-9 rounded-lg" />
+              </div>
+              <Skeleton className="h-8 w-32" />
+              <Skeleton className="h-3 w-20" />
             </CardContent>
           </Card>
         ))}
@@ -82,40 +76,29 @@ export function SummaryCards({ stats, isLoading }: SummaryCardsProps) {
     );
   }
 
-  const items = buildStats(stats);
-
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      {items.map((item) => (
-        <Card key={item.label} className="transition-shadow hover:shadow-md">
-          <CardContent className="p-6">
-            <div className="mb-3 flex items-center justify-between">
-              <span className="text-sm font-medium text-muted-foreground">
-                {item.label}
-              </span>
-              <span
-                className={cn(
-                  'flex h-9 w-9 items-center justify-center rounded-full',
-                  item.iconClass,
-                )}
-              >
-                <item.icon className="h-4 w-4" />
-              </span>
-            </div>
-            <p
-              className={cn(
-                'text-2xl font-bold tabular-nums',
-                item.valueClass,
-              )}
-            >
-              {item.value}
-            </p>
-            {item.hint && (
-              <p className="mt-1 text-xs text-muted-foreground">{item.hint}</p>
-            )}
-          </CardContent>
-        </Card>
-      ))}
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <StatCard
+        label="Saldo atual"
+        value={formatCurrency(stats.balance)}
+        icon={<Wallet className="size-5" />}
+        accent="primary"
+        hint="Entradas menos saídas"
+      />
+      <StatCard
+        label="Total de entradas"
+        value={formatCurrency(stats.totalIncome)}
+        icon={<ArrowUpRight className="size-5" />}
+        accent="success"
+        hint="Receitas no período"
+      />
+      <StatCard
+        label="Total de saídas"
+        value={formatCurrency(stats.totalExpense)}
+        icon={<ArrowDownLeft className="size-5" />}
+        accent="expense"
+        hint="Despesas no período"
+      />
     </div>
   );
 }

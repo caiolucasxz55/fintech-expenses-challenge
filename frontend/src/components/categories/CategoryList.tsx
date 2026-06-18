@@ -1,16 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { Pencil, Trash2, Loader2, Tags } from 'lucide-react';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { FolderOpen, Pencil, Trash2, Loader2 } from 'lucide-react';
+import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -45,9 +39,9 @@ export function CategoryList({
 
   if (isLoading) {
     return (
-      <div className="space-y-2 p-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="h-12 animate-pulse rounded-md bg-muted" />
+      <div className="flex flex-col gap-3">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <Skeleton key={i} className="h-[72px] w-full rounded-xl" />
         ))}
       </div>
     );
@@ -55,62 +49,63 @@ export function CategoryList({
 
   if (categories.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center gap-3 p-12 text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-          <Tags className="h-6 w-6 text-muted-foreground" />
-        </div>
+      <Card className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+        <span className="flex size-12 items-center justify-center rounded-full bg-muted">
+          <FolderOpen className="size-6 text-muted-foreground" />
+        </span>
         <div>
-          <p className="font-medium">Nenhuma categoria ainda</p>
+          <p className="font-medium">Nenhuma categoria</p>
           <p className="text-sm text-muted-foreground">
-            Crie sua primeira categoria para organizar as movimentações.
+            Crie sua primeira categoria para organizar o caixa.
           </p>
         </div>
-      </div>
+      </Card>
     );
   }
 
   return (
     <>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Nome</TableHead>
-            <TableHead>Descrição</TableHead>
-            <TableHead className="w-24 text-right">Ações</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {categories.map((category) => (
-            <TableRow key={category.id}>
-              <TableCell className="font-medium">{category.name}</TableCell>
-              <TableCell className="text-muted-foreground">
-                {category.description || '—'}
-              </TableCell>
-              <TableCell className="text-right">
-                <div className="flex justify-end gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => onEdit(category)}
-                    aria-label="Editar"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="text-destructive hover:text-destructive"
-                    onClick={() => setToDelete(category)}
-                    aria-label="Excluir"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+      <div className="flex flex-col gap-3">
+        {categories.map((category) => (
+          <Card
+            key={category.id}
+            className="flex flex-row items-center justify-between gap-4 p-4"
+          >
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+                <FolderOpen className="size-5" />
+              </span>
+              <div className="flex min-w-0 flex-col">
+                <span className="truncate text-sm font-medium">
+                  {category.name}
+                </span>
+                <span className="truncate text-xs text-muted-foreground">
+                  {category.description || 'Sem descrição'}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Editar categoria"
+                onClick={() => onEdit(category)}
+              >
+                <Pencil className="size-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Excluir categoria"
+                className="text-destructive hover:text-destructive"
+                onClick={() => setToDelete(category)}
+              >
+                <Trash2 className="size-4" />
+              </Button>
+            </div>
+          </Card>
+        ))}
+      </div>
 
       <AlertDialog
         open={Boolean(toDelete)}
@@ -136,7 +131,7 @@ export function CategoryList({
               disabled={remove.isPending}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {remove.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              {remove.isPending && <Loader2 className="size-4 animate-spin" />}
               Excluir
             </AlertDialogAction>
           </AlertDialogFooter>
