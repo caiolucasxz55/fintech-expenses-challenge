@@ -1,0 +1,84 @@
+name: Deploy to Azure
+
+on:
+  push:
+    branches: [main]
+
+env:
+  ACR_SERVER: fintechexpensesacr.azurecr.io
+  BACKEND_APP: fintech-api
+  BACKEND_URL: https://fintech-api.azurewebsites.net/api
+
+jobs:
+  deploy-backend:
+    name: Backend — Build & Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Login ACR
+        uses: azure/docker-login@v1
+        with:
+          login-server: ${{ env.ACR_SERVER }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Build e push backend
+        run: |
+          docker build \
+            -t ${{ env.ACR_SERVER }}/fintech-backend:${{ github.sha }} \
+            -t ${{ env.ACR_SERVER }}/fintech-backend:latest \
+            ./backend
+          docker push ${{ env.ACR_SERVER }}/fintech-backend:${{ github.sha }}
+          docker push ${{ env.ACR_SERVER }}/fintech-backend:latest
+
+      - name: Deploy backend
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.BACKEND_APP }}
+          images: ${{ env.ACR_SERVER }}/fintech-backend:${{ github.sha }}
+
+  deploy-frontend:
+    name: Frontend — Azure Static Web App
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build e deploy SWA
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: upload
+          app_location: frontend
+          api_location: ""
+          output_location: ""
+        env:
+          NEXT_PUBLIC_API_URL: ${{ env.BACKEND_URL }}
+
+  summary:
+    name: Resumo
+    runs-on: ubuntu-latest
+    needs: [deploy-backend, deploy-frontend]
+
+    steps:
+      - name: Escrever resumo
+        run: |
+          echo "### Deploy concluído :rocket:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Serviço | URL |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|-----|" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend (SWA) | https://fintech-web.azurewebsites.net |" >> $GITHUB_STEP_SUMMARY
+          echo "| Backend        | https://${{ env.BACKEND_APP }}.azurewebsites.net |" >> $GITHUB_STEP_SUMMARY
+          echo "| Swagger        | ${{ env.BACKEND_URL }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Health         | https://${{ env.BACKEND_APP }}.azurewebsites.net/health |" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit         | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
