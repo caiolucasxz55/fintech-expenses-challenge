@@ -4,6 +4,8 @@ import type {
   Category,
   CreateCategoryPayload,
   CreateTransactionPayload,
+  DashboardQuery,
+  DashboardStats,
   LoginPayload,
   Paginated,
   RegisterPayload,
@@ -65,4 +67,9 @@ export const transactionsApi = {
 
   remove: (id: string) =>
     request<void>({ url: `/transactions/${id}`, method: 'DELETE' }),
+};
+
+export const dashboardApi = {
+  stats: (query: DashboardQuery) =>
+    request<DashboardStats>({ url: '/dashboard', method: 'GET', params: query }),
 };
