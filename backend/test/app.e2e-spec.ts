@@ -9,6 +9,7 @@ import { TransformInterceptor } from '../src/common/interceptors/transform.inter
 describe('App (e2e)', () => {
   let app: INestApplication;
   let authToken: string;
+  let refreshToken: string;
   let categoryId: string;
   let transactionId: string;
 
@@ -74,7 +75,9 @@ describe('App (e2e)', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.data.accessToken).toBeDefined();
+      expect(res.body.data.refreshToken).toBeDefined();
       authToken = res.body.data.accessToken;
+      refreshToken = res.body.data.refreshToken;
     });
 
     it('POST /api/auth/login - rejects wrong password with 401', async () => {
@@ -83,6 +86,52 @@ describe('App (e2e)', () => {
         .send({ email: testUser.email, password: 'wrong-password' });
 
       expect(res.status).toBe(401);
+    });
+
+    it('POST /api/auth/refresh - renova tokens com refresh token válido', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/auth/refresh')
+        .send({ refreshToken });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.accessToken).toBeDefined();
+      expect(res.body.data.refreshToken).toBeDefined();
+      authToken = res.body.data.accessToken;
+      refreshToken = res.body.data.refreshToken;
+    });
+
+    it('POST /api/auth/refresh - rejeita refresh token inválido com 401', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/auth/refresh')
+        .send({ refreshToken: 'token.invalido.qualquer' });
+
+      expect(res.status).toBe(401);
+    });
+
+    it('POST /api/auth/logout - invalida o refresh token', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/auth/logout')
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(204);
+    });
+
+    it('POST /api/auth/refresh - falha após logout com 401', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/auth/refresh')
+        .send({ refreshToken });
+
+      expect(res.status).toBe(401);
+    });
+
+    it('POST /api/auth/login - re-login após logout para restaurar token', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/auth/login')
+        .send({ email: testUser.email, password: testUser.password });
+
+      expect(res.status).toBe(200);
+      authToken = res.body.data.accessToken;
+      refreshToken = res.body.data.refreshToken;
     });
   });
 
