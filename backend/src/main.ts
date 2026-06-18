@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { applySecurityMiddleware } from './common/security.config';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 
@@ -10,10 +11,7 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api');
 
-  app.enableCors({
-    origin: process.env.FRONTEND_URL ?? '*',
-    credentials: true,
-  });
+  applySecurityMiddleware(app);
 
   app.useGlobalPipes(
     new ValidationPipe({

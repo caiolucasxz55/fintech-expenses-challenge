@@ -2,6 +2,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { applySecurityMiddleware } from '../src/common/security.config';
 import { GlobalExceptionFilter } from '../src/common/filters/global-exception.filter';
 import { TransformInterceptor } from '../src/common/interceptors/transform.interceptor';
 
@@ -17,6 +18,12 @@ describe('App (e2e)', () => {
     password: 'password123',
   };
 
+  const secondUser = {
+    name: 'Second User',
+    email: `e2e-second-${Date.now()}@example.com`,
+    password: 'password123',
+  };
+
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
@@ -24,6 +31,7 @@ describe('App (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     app.setGlobalPrefix('api');
+    applySecurityMiddleware(app);
     app.useGlobalPipes(
       new ValidationPipe({
         whitelist: true,
@@ -74,11 +82,6 @@ describe('App (e2e)', () => {
         .post('/api/auth/login')
         .send({ email: testUser.email, password: 'wrong-password' });
 
-      expect(res.status).toBe(401);
-    });
-
-    it('GET /api/categories - rejects unauthenticated request with 401', async () => {
-      const res = await request(app.getHttpServer()).get('/api/categories');
       expect(res.status).toBe(401);
     });
   });
@@ -230,6 +233,229 @@ describe('App (e2e)', () => {
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(res.status).toBe(200);
+    });
+  });
+
+  describe('Security', () => {
+    describe('Security headers (Helmet)', () => {
+      it('response includes X-Content-Type-Options: nosniff', async () => {
+        const res = await request(app.getHttpServer())
+          .get('/api/categories')
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.headers['x-content-type-options']).toBe('nosniff');
+      });
+
+      it('response includes X-Frame-Options to prevent clickjacking', async () => {
+        const res = await request(app.getHttpServer())
+          .get('/api/categories')
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.headers['x-frame-options']).toBeDefined();
+      });
+
+      it('response includes Strict-Transport-Security (HSTS)', async () => {
+        const res = await request(app.getHttpServer())
+          .get('/api/categories')
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.headers['strict-transport-security']).toContain('max-age=');
+      });
+
+      it('response includes X-DNS-Prefetch-Control', async () => {
+        const res = await request(app.getHttpServer())
+          .get('/api/categories')
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.headers['x-dns-prefetch-control']).toBeDefined();
+      });
+    });
+
+    describe('Authentication guard', () => {
+      const protectedRoutes = [
+        { method: 'get', path: '/api/categories' },
+        { method: 'get', path: '/api/transactions' },
+        { method: 'get', path: '/api/dashboard' },
+      ];
+
+      protectedRoutes.forEach(({ method, path }) => {
+        it(`${method.toUpperCase()} ${path} - rejects request without token (401)`, async () => {
+          const res = await (request(app.getHttpServer()) as any)[method](path);
+          expect(res.status).toBe(401);
+        });
+      });
+
+      it('rejects request with malformed token (401)', async () => {
+        const res = await request(app.getHttpServer())
+          .get('/api/categories')
+          .set('Authorization', 'Bearer not.a.valid.jwt');
+
+        expect(res.status).toBe(401);
+      });
+
+      it('rejects request with tampered JWT signature (401)', async () => {
+        const [header, payload] = authToken.split('.');
+        const tamperedToken = `${header}.${payload}.invalidsignature`;
+
+        const res = await request(app.getHttpServer())
+          .get('/api/categories')
+          .set('Authorization', `Bearer ${tamperedToken}`);
+
+        expect(res.status).toBe(401);
+      });
+
+      it('rejects request with token in wrong format (401)', async () => {
+        const res = await request(app.getHttpServer())
+          .get('/api/categories')
+          .set('Authorization', authToken);
+
+        expect(res.status).toBe(401);
+      });
+    });
+
+    describe('Input validation', () => {
+      it('rejects unknown fields (forbidNonWhitelisted) with 400', async () => {
+        const res = await request(app.getHttpServer())
+          .post('/api/categories')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ name: 'Valid', unknownField: 'hacker' });
+
+        expect(res.status).toBe(400);
+      });
+
+      it('rejects invalid transaction type enum with 400', async () => {
+        const res = await request(app.getHttpServer())
+          .post('/api/transactions')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            description: 'Test',
+            value: '10.00',
+            type: 'invalid_type',
+            date: '2024-01-15',
+            categoryId,
+          });
+
+        expect(res.status).toBe(400);
+      });
+
+      it('não quebra com payload XSS na descrição (sanitização é responsabilidade do frontend)', async () => {
+        const res = await request(app.getHttpServer())
+          .post('/api/transactions')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            description: '<script>alert("xss")</script>',
+            value: '10.00',
+            type: 'expense',
+            date: '2024-01-15',
+            categoryId,
+          });
+
+        expect([201, 400]).toContain(res.status);
+      });
+
+      it('rejects negative page number with 400', async () => {
+        const res = await request(app.getHttpServer())
+          .get('/api/transactions?page=-1')
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(400);
+      });
+
+      it('rejects missing required fields on transaction creation with 400', async () => {
+        const res = await request(app.getHttpServer())
+          .post('/api/transactions')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ description: 'Incomplete' });
+
+        expect(res.status).toBe(400);
+      });
+
+      it('rejects short password on register with 400', async () => {
+        const res = await request(app.getHttpServer())
+          .post('/api/auth/register')
+          .send({ name: 'Test', email: 'test@test.com', password: '123' });
+
+        expect(res.status).toBe(400);
+      });
+
+      it('rejects invalid email format on register with 400', async () => {
+        const res = await request(app.getHttpServer())
+          .post('/api/auth/register')
+          .send({ name: 'Test', email: 'not-an-email', password: 'password123' });
+
+        expect(res.status).toBe(400);
+      });
+    });
+
+    describe('Cross-user isolation', () => {
+      let secondToken: string;
+      let secondCategoryId: string;
+
+      beforeAll(async () => {
+        const reg = await request(app.getHttpServer())
+          .post('/api/auth/register')
+          .send(secondUser);
+        secondToken = reg.body.data.accessToken;
+
+        const cat = await request(app.getHttpServer())
+          .post('/api/categories')
+          .set('Authorization', `Bearer ${secondToken}`)
+          .send({ name: 'Second User Category' });
+        secondCategoryId = cat.body.data.id;
+      });
+
+      it('user A cannot read user B category (404)', async () => {
+        const res = await request(app.getHttpServer())
+          .get(`/api/categories/${secondCategoryId}`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(404);
+      });
+
+      it('user A cannot update user B category (404)', async () => {
+        const res = await request(app.getHttpServer())
+          .put(`/api/categories/${secondCategoryId}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ name: 'Hijacked' });
+
+        expect(res.status).toBe(404);
+      });
+
+      it('user A cannot delete user B category (404)', async () => {
+        const res = await request(app.getHttpServer())
+          .delete(`/api/categories/${secondCategoryId}`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(404);
+      });
+
+      it('user A list does not contain user B categories', async () => {
+        const res = await request(app.getHttpServer())
+          .get('/api/categories')
+          .set('Authorization', `Bearer ${authToken}`);
+
+        const ids = res.body.data.map((c: { id: string }) => c.id);
+        expect(ids).not.toContain(secondCategoryId);
+      });
+
+      it('user A cannot read user B transaction (403)', async () => {
+        const tx = await request(app.getHttpServer())
+          .post('/api/transactions')
+          .set('Authorization', `Bearer ${secondToken}`)
+          .send({
+            description: 'Private tx',
+            value: '99.00',
+            type: 'income',
+            date: '2024-06-01',
+            categoryId: secondCategoryId,
+          });
+
+        const res = await request(app.getHttpServer())
+          .get(`/api/transactions/${tx.body.data.id}`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(403);
+      });
     });
   });
 
