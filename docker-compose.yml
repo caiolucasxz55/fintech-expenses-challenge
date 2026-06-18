@@ -29,17 +29,20 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    restart: unless-stopped
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        # URL pública da API; é embutida no bundle durante o build.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000/api}
     ports:
       - "3001:3000"
-    env_file:
-      - ./frontend/.env.local
     depends_on:
       - backend
+    restart: unless-stopped
 
 volumes:
   postgres_data:
